@@ -1,43 +1,79 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var (
-	probeDuration prometheus.Gauge
-	probeSuccess  prometheus.Gauge
-	sampleMetric  prometheus.Gauge
-	sampleWidget  *prometheus.GaugeVec
+const (
+	prefix string = "openotp"
 )
 
-func initCollectors() {
-	probeDuration = prometheus.NewGauge(
+type prometheusMetrics struct {
+	probeDuration  prometheus.Gauge
+	probeSuccess   prometheus.Gauge
+	usersMax       prometheus.Gauge
+	usersActive    prometheus.Gauge
+	serverEnabled  *prometheus.GaugeVec
+	serverStatus   *prometheus.GaugeVec
+	serverServices *prometheus.GaugeVec
+}
+
+func addPrefix(s string) string {
+	return fmt.Sprintf("%s_%s", prefix, s)
+}
+
+func initCollectors() *prometheusMetrics {
+	m := new(prometheusMetrics)
+	m.probeDuration = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "probe_duration",
 			Help: "How many seconds the probe took",
 		},
 	)
 
-	probeSuccess = prometheus.NewGauge(
+	m.probeSuccess = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "probe_success",
 			Help: "Whether or not the probe succeeded",
 		},
 	)
 
-	sampleMetric = prometheus.NewGauge(
+	m.usersMax = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "sample_metric",
-			Help: "An example gauge metric",
+			Name: addPrefix("users_max"),
+			Help: "Maximum number of users the current OpenOTP license permits",
 		},
 	)
 
-	sampleWidget = prometheus.NewGaugeVec(
+	m.usersActive = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "sample_widget",
-			Help: "An example gauge metric with a label",
+			Name: addPrefix("users_active"),
+			Help: "Current number of license-consuming users",
 		},
-		[]string{"widget"},
 	)
+	m.serverEnabled = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: addPrefix("server_enabled"),
+			Help: "Is the OpenOTP server enabled",
+		},
+		[]string{"version"},
+	)
+	m.serverStatus = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: addPrefix("server_status"),
+			Help: "Status of the OpenOTP server",
+		},
+		[]string{"version"},
+	)
+	m.serverServices = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: addPrefix("server_services"),
+			Help: "Status of the OpenOTP services",
+		},
+		[]string{"name"},
+	)
+
+	return m
 }

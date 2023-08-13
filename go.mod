@@ -1,4 +1,4 @@
-module github.com/crooks/prom_probe
+module github.com/crooks/openotp_exporter
 
 go 1.19
 
@@ -7,7 +7,8 @@ require (
 	github.com/crooks/jlog v0.0.0-20221021140856-377a64c64820
 	github.com/crooks/log-go-level v0.0.0-20221021134405-8ea229e5ea34
 	github.com/prometheus/client_golang v1.14.0
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+	github.com/ybbus/jsonrpc/v3 v3.1.4
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

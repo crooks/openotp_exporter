@@ -16,6 +16,11 @@ type Flags struct {
 }
 
 type Config struct {
+	API struct {
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		CertFile string `yaml:"certfile"`
+	} `yaml:"api"`
 	Logging struct {
 		Filename string `yaml:"filename"`
 		Journal  bool   `yaml:"journal"`
