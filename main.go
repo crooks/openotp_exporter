@@ -232,5 +232,6 @@ func main() {
 	http.HandleFunc("/probe", func(w http.ResponseWriter, r *http.Request) {
 		metrics.probeHandler(w, r)
 	})
-	http.ListenAndServe("localhost:8080", nil)
+	hostport := fmt.Sprintf("%s:%d", cfg.Exporter.Hostname, cfg.Exporter.Port)
+	http.ListenAndServe(hostport, nil)
 }

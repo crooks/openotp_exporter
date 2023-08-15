@@ -26,6 +26,10 @@ type Config struct {
 		Journal  bool   `yaml:"journal"`
 		LevelStr string `yaml:"level"`
 	} `yaml:"logging"`
+	Exporter struct {
+		Hostname string `yaml:"hostname"`
+		Port     int    `yaml:"port"`
+	}
 }
 
 // ParseConfig imports a yaml formatted config file into a Config struct
