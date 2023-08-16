@@ -66,7 +66,7 @@ func apiBatchRequests(target string) (jsonrpc.RPCResponses, error) {
 	ctx := context.Background()
 	rpcClient := newRPC(target)
 
-	responses, _ := rpcClient.CallBatch(ctx, jsonrpc.RPCRequests{
+	responses, err := rpcClient.CallBatch(ctx, jsonrpc.RPCRequests{
 		jsonrpc.NewRequest("Count_Activated_Users"),
 		jsonrpc.NewRequest("Get_License_Details"),
 		jsonrpc.NewRequest("Server_status", map[string]bool{
@@ -75,8 +75,14 @@ func apiBatchRequests(target string) (jsonrpc.RPCResponses, error) {
 			"websrvs": true,
 		}),
 	})
+	if err != nil {
+		return responses, err
+	}
 	if responses.HasError() {
 		err = errors.New("RPC request returned errors")
+	}
+	if len(responses) != 3 {
+		err = fmt.Errorf("Unexpected batch response from %s.  Expected=3, Got=%d ", target, len(responses))
 	}
 	return responses, err
 }
@@ -111,8 +117,6 @@ func apiServerStatus(response *jsonrpc.RPCResponse) (*serverStatusFields, error)
 	if err != nil {
 		return status, err
 	}
-	fmt.Println(status.Enabled)
-	fmt.Println(status.Version)
 	return status, nil
 }
 
