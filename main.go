@@ -26,8 +26,8 @@ var (
 	flags *config.Flags
 )
 
-// getLicenseDetails contains an incompleted subset of items returned from the API by "get_license_details".
-type getLicenseDetails struct {
+// licenseDetailsFields contains an incompleted subset of items returned from the API by "get_license_details".
+type licenseDetailsFields struct {
 	CustomerID   string `json:"customer_id"`
 	ErrorMessage string `json:"error_message"`
 	InstanceID   string `json:"instance_id"`
@@ -36,6 +36,8 @@ type getLicenseDetails struct {
 			MaximumUsers string `json:"maximum_users"`
 		} `json:"OpenOTP"`
 	} `json:"products"`
+	ValidFrom string `json:"valid_from"`
+	ValidTo   string `json:"valid_to"`
 }
 
 type serverStatusFields struct {
@@ -61,6 +63,15 @@ func boolToFloat(b bool) float64 {
 	return 1
 }
 
+func strToEpoch(s string) float64 {
+	t, err := time.Parse("2006-01-02 15:04:05", s)
+	if err != nil {
+		log.Warnf("Cannot convert %s to date/time")
+		return 0
+	}
+	return float64(t.Unix())
+}
+
 func apiBatchRequests(target string) (jsonrpc.RPCResponses, error) {
 	var err error
 	ctx := context.Background()
@@ -82,7 +93,7 @@ func apiBatchRequests(target string) (jsonrpc.RPCResponses, error) {
 		err = errors.New("RPC request returned errors")
 	}
 	if len(responses) != 3 {
-		err = fmt.Errorf("Unexpected batch response from %s.  Expected=3, Got=%d ", target, len(responses))
+		err = fmt.Errorf("unexpected batch response from %s.  expected=3, got=%d ", target, len(responses))
 	}
 	return responses, err
 }
@@ -91,24 +102,20 @@ func apiActiveUsers(response *jsonrpc.RPCResponse) (float64, error) {
 	// Active Users is easy!  Only a simple integer is returned from the API.
 	activeUsers, err := response.GetInt()
 	if err != nil {
-		newErr := fmt.Errorf("Unable to determine Activated Users: %v", err)
+		newErr := fmt.Errorf("unable to determine activated users: %v", err)
 		return float64(activeUsers), newErr
 	}
 	return float64(activeUsers), err
 }
 
-func apiGetLicenseDetails(response *jsonrpc.RPCResponse) (float64, error) {
+func apiGetLicenseDetails(response *jsonrpc.RPCResponse) (*licenseDetailsFields, error) {
 	// Maximum Users is burried in a messy nest.
-	var lic *getLicenseDetails
+	var lic *licenseDetailsFields
 	err := response.GetObject(&lic)
 	if err != nil {
-		log.Fatal(err)
+		return lic, err
 	}
-	maxUsers, err := strconv.ParseFloat(lic.Products.OpenOTP.MaximumUsers, 64)
-	if err != nil {
-		return maxUsers, err
-	}
-	return maxUsers, err
+	return lic, err
 }
 
 func apiServerStatus(response *jsonrpc.RPCResponse) (*serverStatusFields, error) {
@@ -120,16 +127,13 @@ func apiServerStatus(response *jsonrpc.RPCResponse) (*serverStatusFields, error)
 	return status, nil
 }
 
-func (m *prometheusMetrics) probeHandler(w http.ResponseWriter, r *http.Request) {
+func (m *prometheusMetrics) probeHandler(w http.ResponseWriter, r *http.Request, reg *prometheus.Registry) {
 	params := r.URL.Query()
 	target := params.Get("target")
 	if target == "" {
 		http.Error(w, "Target parameter missing or empty", http.StatusBadRequest)
 		return
 	}
-	registry := prometheus.NewRegistry()
-	registry.MustRegister(m.probeDuration)
-	registry.MustRegister(m.probeSuccess)
 	var success float64 = 1
 	start := time.Now()
 	responses, err := apiBatchRequests(target)
@@ -143,25 +147,27 @@ func (m *prometheusMetrics) probeHandler(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			log.Warn(err)
 		} else {
-			registry.MustRegister(m.usersActive)
 			m.usersActive.Set(au)
 		}
 		// Licensed Users Count
-		lu, err := apiGetLicenseDetails(responses[1])
+		license, err := apiGetLicenseDetails(responses[1])
 		if err != nil {
 			log.Warn(err)
 		} else {
-			registry.MustRegister(m.usersMax)
-			m.usersMax.Set(lu)
+			mu, err := strconv.ParseFloat(license.Products.OpenOTP.MaximumUsers, 64)
+			if err != nil {
+				log.Warn(err)
+			} else {
+				m.licenseMaxUsers.WithLabelValues(license.CustomerID, license.InstanceID).Set(mu)
+			}
+			m.licenseValidFrom.WithLabelValues(license.CustomerID, license.InstanceID).Set(strToEpoch(license.ValidFrom))
+			m.licenseValidTo.WithLabelValues(license.CustomerID, license.InstanceID).Set(strToEpoch(license.ValidTo))
 		}
 		// Server Status
 		ss, err := apiServerStatus(responses[2])
 		if err != nil {
 			log.Warn(err)
 		} else {
-			registry.MustRegister(m.serverEnabled)
-			registry.MustRegister(m.serverStatus)
-			registry.MustRegister(m.serverServices)
 			m.serverEnabled.WithLabelValues(ss.Version).Set(boolToFloat(ss.Enabled))
 			m.serverStatus.WithLabelValues(ss.Version).Set(boolToFloat(ss.Status))
 			m.serverServices.WithLabelValues("ldap").Set(boolToFloat(ss.Servers.Ldap))
@@ -175,7 +181,7 @@ func (m *prometheusMetrics) probeHandler(w http.ResponseWriter, r *http.Request)
 	duration := time.Since(start).Seconds()
 	m.probeSuccess.Set(success)
 	m.probeDuration.Set(duration)
-	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+	h := promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg})
 	h.ServeHTTP(w, r)
 }
 
@@ -231,10 +237,11 @@ func main() {
 		log.Debugf("Logging to file %s has been initialised at level: %s", cfg.Logging.Filename, cfg.Logging.LevelStr)
 	}
 
-	metrics := initCollectors()
+	registry := prometheus.NewRegistry()
+	metrics := initCollectors(registry)
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/probe", func(w http.ResponseWriter, r *http.Request) {
-		metrics.probeHandler(w, r)
+		metrics.probeHandler(w, r, registry)
 	})
 	hostport := fmt.Sprintf("%s:%d", cfg.Exporter.Hostname, cfg.Exporter.Port)
 	http.ListenAndServe(hostport, nil)

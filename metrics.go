@@ -11,20 +11,22 @@ const (
 )
 
 type prometheusMetrics struct {
-	probeDuration  prometheus.Gauge
-	probeSuccess   prometheus.Gauge
-	usersMax       prometheus.Gauge
-	usersActive    prometheus.Gauge
-	serverEnabled  *prometheus.GaugeVec
-	serverStatus   *prometheus.GaugeVec
-	serverServices *prometheus.GaugeVec
+	probeDuration    prometheus.Gauge
+	probeSuccess     prometheus.Gauge
+	licenseMaxUsers  *prometheus.GaugeVec
+	licenseValidFrom *prometheus.GaugeVec
+	licenseValidTo   *prometheus.GaugeVec
+	usersActive      prometheus.Gauge
+	serverEnabled    *prometheus.GaugeVec
+	serverStatus     *prometheus.GaugeVec
+	serverServices   *prometheus.GaugeVec
 }
 
 func addPrefix(s string) string {
 	return fmt.Sprintf("%s_%s", prefix, s)
 }
 
-func initCollectors() *prometheusMetrics {
+func initCollectors(reg *prometheus.Registry) *prometheusMetrics {
 	m := new(prometheusMetrics)
 	m.probeDuration = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -32,6 +34,7 @@ func initCollectors() *prometheusMetrics {
 			Help: "How many seconds the probe took",
 		},
 	)
+	reg.MustRegister(m.probeDuration)
 
 	m.probeSuccess = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -39,13 +42,34 @@ func initCollectors() *prometheusMetrics {
 			Help: "Whether or not the probe succeeded",
 		},
 	)
+	reg.MustRegister(m.probeSuccess)
 
-	m.usersMax = prometheus.NewGauge(
+	m.licenseMaxUsers = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: addPrefix("users_max"),
+			Name: addPrefix("license_users_max"),
 			Help: "Maximum number of users the current OpenOTP license permits",
 		},
+		[]string{"customer", "instance"},
 	)
+	reg.MustRegister(m.licenseMaxUsers)
+
+	m.licenseValidFrom = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: addPrefix("license_valid_from"),
+			Help: "Epoch timestamp of license start date",
+		},
+		[]string{"customer", "instance"},
+	)
+	reg.MustRegister(m.licenseValidFrom)
+
+	m.licenseValidTo = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: addPrefix("license_valid_to"),
+			Help: "Epoch timestamp of license end date",
+		},
+		[]string{"customer", "instance"},
+	)
+	reg.MustRegister(m.licenseValidTo)
 
 	m.usersActive = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -53,6 +77,8 @@ func initCollectors() *prometheusMetrics {
 			Help: "Current number of license-consuming users",
 		},
 	)
+	reg.MustRegister(m.usersActive)
+
 	m.serverEnabled = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: addPrefix("server_enabled"),
@@ -60,6 +86,8 @@ func initCollectors() *prometheusMetrics {
 		},
 		[]string{"version"},
 	)
+	reg.MustRegister(m.serverEnabled)
+
 	m.serverStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: addPrefix("server_status"),
@@ -67,6 +95,8 @@ func initCollectors() *prometheusMetrics {
 		},
 		[]string{"version"},
 	)
+	reg.MustRegister(m.serverStatus)
+
 	m.serverServices = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: addPrefix("server_services"),
@@ -74,6 +104,7 @@ func initCollectors() *prometheusMetrics {
 		},
 		[]string{"name"},
 	)
+	reg.MustRegister(m.serverServices)
 
 	return m
 }
