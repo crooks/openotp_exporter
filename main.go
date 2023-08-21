@@ -54,6 +54,7 @@ type serverStatusFields struct {
 	Version string `json:"version"`
 }
 
+// boolToFloat converts booleans to 1 or 0 for ingestion by Prometheus. 1=Yes, 0=No.
 func boolToFloat(b bool) float64 {
 	if !b {
 		// False
@@ -63,6 +64,7 @@ func boolToFloat(b bool) float64 {
 	return 1
 }
 
+// strToEpoch converts OpenOTPs date/time string format to Unix Epoch.
 func strToEpoch(s string) float64 {
 	t, err := time.Parse("2006-01-02 15:04:05", s)
 	if err != nil {
@@ -72,6 +74,8 @@ func strToEpoch(s string) float64 {
 	return float64(t.Unix())
 }
 
+// apiBatchRequests performs a sequence of RPC requests to OpenOTP.  This is preferred to lots of individual requests
+// as OpenOTP uses (horrible) TLS renegotiation.
 func apiBatchRequests(target string) (jsonrpc.RPCResponses, error) {
 	var err error
 	ctx := context.Background()
@@ -98,6 +102,7 @@ func apiBatchRequests(target string) (jsonrpc.RPCResponses, error) {
 	return responses, err
 }
 
+// activeUsers extracts the number of actived users from OpenOTP
 func apiActiveUsers(response *jsonrpc.RPCResponse) (float64, error) {
 	// Active Users is easy!  Only a simple integer is returned from the API.
 	activeUsers, err := response.GetInt()
@@ -109,7 +114,6 @@ func apiActiveUsers(response *jsonrpc.RPCResponse) (float64, error) {
 }
 
 func apiGetLicenseDetails(response *jsonrpc.RPCResponse) (*licenseDetailsFields, error) {
-	// Maximum Users is burried in a messy nest.
 	var lic *licenseDetailsFields
 	err := response.GetObject(&lic)
 	if err != nil {
@@ -141,6 +145,7 @@ func (m *prometheusMetrics) probeHandler(w http.ResponseWriter, r *http.Request,
 		success = 0
 		log.Warnf("Probe of %s failed with %v", target, err)
 	}
+	// If the apiBatchResponse was successful, there will be an array of responses to process.
 	if success == 1 {
 		// Activated User Count
 		au, err := apiActiveUsers(responses[0])
@@ -217,24 +222,32 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to set log level: %v", err)
 	}
-	if cfg.Logging.Journal && !jlog.Enabled() {
-		log.Warn("Cannot log to systemd journal")
-	}
 	if cfg.Logging.Journal && jlog.Enabled() {
 		log.Current = jlog.NewJournal(loglev)
-		log.Debugf("Logging to journal has been initialised at level: %s", cfg.Logging.LevelStr)
+		log.Infof("Logging to journal has been initialised at level: %s", cfg.Logging.LevelStr)
 	} else {
-		if cfg.Logging.Filename == "" {
-			log.Fatal("Cannot log to file, no filename specified in config")
+		// Journal is not available
+		if cfg.Logging.Journal {
+			log.Warn("Configured for journal logging but journal is not available.  Logging to file instead.")
 		}
-		logWriter, err := os.OpenFile(cfg.Logging.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			log.Fatalf("Unable to open logfile: %s", err)
+		var logWriter *os.File
+		if cfg.Logging.Filename == "" {
+			// Create a temporary file for logging
+			logWriter, err = os.CreateTemp("", "openotp_exporter.log")
+			if err != nil {
+				log.Fatalf("Cannot log to temp file: %v", err)
+			}
+		} else {
+			// Log to the configured file
+			logWriter, err = os.OpenFile(cfg.Logging.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+			if err != nil {
+				log.Fatalf("Unable to open logfile: %s", err)
+			}
 		}
 		defer logWriter.Close()
 		stdlog.SetOutput(logWriter)
 		log.Current = log.StdLogger{Level: loglev}
-		log.Debugf("Logging to file %s has been initialised at level: %s", cfg.Logging.Filename, cfg.Logging.LevelStr)
+		log.Debugf("Logging to file %s has been initialised at level: %s", logWriter.Name(), cfg.Logging.LevelStr)
 	}
 
 	registry := prometheus.NewRegistry()
@@ -244,5 +257,10 @@ func main() {
 		metrics.probeHandler(w, r, registry)
 	})
 	hostport := fmt.Sprintf("%s:%d", cfg.Exporter.Hostname, cfg.Exporter.Port)
+	if cfg.Exporter.Hostname == "" {
+		log.Infof("Listening on all interfaces on port %d", cfg.Exporter.Port)
+	} else {
+		log.Infof("Listening on %s", hostport)
+	}
 	http.ListenAndServe(hostport, nil)
 }
