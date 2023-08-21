@@ -29,7 +29,7 @@ type Config struct {
 	Exporter struct {
 		Hostname string `yaml:"hostname"`
 		Port     int    `yaml:"port"`
-	}
+	} `yaml:"exporter"`
 }
 
 // ParseConfig imports a yaml formatted config file into a Config struct
@@ -44,6 +44,15 @@ func ParseConfig(filename string) (*Config, error) {
 	d := yaml.NewDecoder(file)
 	if err := d.Decode(&config); err != nil {
 		return nil, err
+	}
+
+	// Set some default values
+	if config.Logging.LevelStr == "" {
+		config.Logging.LevelStr = "info"
+	}
+	if config.Exporter.Port == 0 {
+		// This is the default port assigned in the prometheus Wiki
+		config.Exporter.Port = 9794
 	}
 	return config, nil
 }
