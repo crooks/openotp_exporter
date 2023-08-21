@@ -237,6 +237,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("Cannot log to temp file: %v", err)
 			}
+			fmt.Printf("Logging to: %s", logWriter.Name())
 		} else {
 			// Log to the configured file
 			logWriter, err = os.OpenFile(cfg.Logging.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
