@@ -20,6 +20,7 @@ type Config struct {
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`
 		CertFile string `yaml:"certfile"`
+		Path     string `yaml:"path"`
 	} `yaml:"api"`
 	Logging struct {
 		Filename string `yaml:"filename"`
@@ -47,6 +48,9 @@ func ParseConfig(filename string) (*Config, error) {
 	}
 
 	// Set some default values
+	if config.API.Path == "" {
+		config.API.Path = "manag/"
+	}
 	if config.Logging.LevelStr == "" {
 		config.Logging.LevelStr = "info"
 	}
