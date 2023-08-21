@@ -134,6 +134,7 @@ func apiServerStatus(response *jsonrpc.RPCResponse) (*serverStatusFields, error)
 
 func (m *prometheusMetrics) probeHandler(w http.ResponseWriter, r *http.Request, reg *prometheus.Registry) {
 	params := r.URL.Query()
+	log.Debugf("Probe request from: %s", r.RemoteAddr)
 	targetHost := params.Get("target")
 	if targetHost == "" {
 		http.Error(w, "Target parameter missing or empty", http.StatusBadRequest)
