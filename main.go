@@ -134,12 +134,12 @@ func apiServerStatus(response *jsonrpc.RPCResponse) (*serverStatusFields, error)
 
 func (m *prometheusMetrics) probeHandler(w http.ResponseWriter, r *http.Request, reg *prometheus.Registry) {
 	params := r.URL.Query()
-	log.Debugf("Probe request from: %s", r.RemoteAddr)
 	targetHost := params.Get("target")
 	if targetHost == "" {
 		http.Error(w, "Target parameter missing or empty", http.StatusBadRequest)
 		return
 	}
+	log.Debugf("Probe request: From=%s, Target=%s", r.RemoteAddr, targetHost)
 	target := fmt.Sprintf("%s/%s", targetHost, strings.TrimPrefix(cfg.API.Path, "/"))
 	var success float64 = 1
 	start := time.Now()
