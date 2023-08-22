@@ -49,7 +49,7 @@ func initCollectors(reg *prometheus.Registry) *prometheusMetrics {
 			Name: addPrefix("license_users_max"),
 			Help: "Maximum number of users the current OpenOTP license permits",
 		},
-		[]string{"customer", "instance"},
+		[]string{"customer", "license"},
 	)
 	reg.MustRegister(m.licenseMaxUsers)
 
@@ -58,7 +58,7 @@ func initCollectors(reg *prometheus.Registry) *prometheusMetrics {
 			Name: addPrefix("license_valid_from"),
 			Help: "Epoch timestamp of license start date",
 		},
-		[]string{"customer", "instance"},
+		[]string{"customer", "license"},
 	)
 	reg.MustRegister(m.licenseValidFrom)
 
@@ -67,7 +67,7 @@ func initCollectors(reg *prometheus.Registry) *prometheusMetrics {
 			Name: addPrefix("license_valid_to"),
 			Help: "Epoch timestamp of license end date",
 		},
-		[]string{"customer", "instance"},
+		[]string{"customer", "license"},
 	)
 	reg.MustRegister(m.licenseValidTo)
 
